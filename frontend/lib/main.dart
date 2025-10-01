@@ -1,7 +1,15 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'features/auth/presentation/screens/login_screen.dart';
 
-void main() {
-  runApp(const PrepBuddyApp());
+void main() async {
+  // Ensure that Flutter's binding is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    // options: DefaultFirebaseOptions.currentPlatform, // This line is added by the FlutterFire CLI
+  );
+  runApp(const MyApp());
 }
 
 class PrepBuddyApp extends StatelessWidget {
@@ -9,14 +17,10 @@ class PrepBuddyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       title: 'PrepBuddy',
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('PrepBuddy'),
-        ),
-      
-      ),
+      // Set your LoginScreen as the home screen
+      home: MyApp(),
     );
   }
 }
