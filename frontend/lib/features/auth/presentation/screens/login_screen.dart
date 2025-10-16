@@ -8,6 +8,7 @@ import 'package:frontend/firebase_options.dart';
 import 'package:frontend/features/auth/presentation/screens/home_screen.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -24,9 +25,9 @@ class GoogleSignInService {
   // A one-time initialization for Google Sign-In with your server client ID.
   static Future<void> initSignIn() async {
     if (!isInitialize) {
-      
       await _googleSignIn.initialize(
-        serverClientId: '887744791735-och61t1j0vk71drdlcb7ohbof9rpuk9l.apps.googleusercontent.com',
+        serverClientId:
+            '887744791735-och61t1j0vk71drdlcb7ohbof9rpuk9l.apps.googleusercontent.com',
       );
       isInitialize = true;
     }
@@ -38,45 +39,47 @@ class GoogleSignInService {
     try {
       await initSignIn(); // Ensure Google Sign-In is initialized.
 
-      final GoogleSignInAccount? googleUser = await _googleSignIn.authenticate();
+      final GoogleSignInAccount? googleUser = await _googleSignIn
+          .authenticate();
 
       if (googleUser == null) {
-        
         return null;
       }
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      
       // The idToken is sufficient for Firebase authentication.
       final AuthCredential credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
       );
 
-      final UserCredential userCredential =
-          await _auth.signInWithCredential(credential);
+      final UserCredential userCredential = await _auth.signInWithCredential(
+        credential,
+      );
 
       final User? user = userCredential.user;
 
       // After successful sign-in, check for user data in Firestore.
       // If the user is new, create a new document for them.
       if (user != null) {
-        final userDoc =
-            FirebaseFirestore.instance.collection('users').doc(user.uid);
+        final userDoc = FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid);
         final docSnapshot = await userDoc.get();
 
         if (!docSnapshot.exists) {
           // Try to split the displayName into first and last names
           final nameParts = user.displayName?.split(RegExp(r'\s+')) ?? [];
           final String firstName = nameParts.isNotEmpty ? nameParts.first : '';
-          final String lastName =
-              nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+          final String lastName = nameParts.length > 1
+              ? nameParts.sublist(1).join(' ')
+              : '';
 
           await userDoc.set({
             'firstName': firstName,
             'lastName': lastName,
-            'mobileNumber': '', 
+            'mobileNumber': '',
             'email': user.email ?? '',
 
             'uid': user.uid,
@@ -133,6 +136,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isPasswordObscured = true;
 
   @override
   void dispose() {
@@ -141,8 +145,31 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // --- GOOGLE SIGN-IN (UPDATED) ---
+  // --- HELPER FUNCTION FOR PROFESSIONAL ERROR DIALOG ---
+  void _showErrorDialog(String message) {
+    // Check if the widget is still in the tree before showing a dialog
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Authentication Failed'),
+        content: Text(message),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('Okay'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- GOOGLE SIGN-IN (UPDATED ERROR HANDLING) ---
   Future<void> _signInWithGoogle() async {
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -150,30 +177,30 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     try {
-      // Call the static signInWithGoogle method from our service class
       final userCredential = await GoogleSignInService.signInWithGoogle();
 
-      // If sign in is successful and the widget is still mounted
       if (userCredential != null && mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
       } else if (mounted) {
-        // This handles the case where the user cancels the sign-in flow
-        Navigator.of(context).pop(); // Close the loading dialog
+        // User cancelled the sign-in flow
+        Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
-        Navigator.of(context).pop(); // Close the loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Google Sign-In Failed: ${e.toString()}")),
+        Navigator.of(context).pop();
+        // Show professional error dialog
+        _showErrorDialog(
+          'Could not sign in with Google. Please check your connection and try again.',
         );
       }
     }
   }
 
-  // --- EMAIL SIGN-IN (Unchanged) ---
+  // --- EMAIL SIGN-IN (UPDATED ERROR HANDLING) ---
   Future<void> _signInUser() async {
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -193,9 +220,34 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
+        Navigator.of(context).pop(); // Dismiss loading indicator first
+        String errorMessage;
+        // Provide user-friendly messages for common errors
+        switch (e.code) {
+          case 'invalid-credential':
+            errorMessage = 'Invalid email or password. Please try again.';
+            break;
+          case 'user-disabled':
+            errorMessage = 'This account has been disabled.';
+            break;
+          case 'invalid-email':
+            errorMessage = 'The email address is not formatted correctly.';
+            break;
+          case 'network-request-failed':
+            errorMessage =
+                'Please check your internet connection and try again.';
+            break;
+          default:
+            errorMessage =
+                'An unexpected error occurred. Please try again later.';
+        }
+        _showErrorDialog(errorMessage);
+      }
+    } catch (e) {
+      if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? "Login Failed")),
+        _showErrorDialog(
+          'An unexpected error occurred. Please try again later.',
         );
       }
     }
@@ -242,39 +294,61 @@ class _LoginScreenState extends State<LoginScreen> {
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     labelText: 'Email',
+                    prefixIcon: const Icon(Icons.email_outlined),
                     filled: true,
                     fillColor: textFieldColor,
                     contentPadding: const EdgeInsets.symmetric(
-                        vertical: 18, horizontal: 20),
-                    enabledBorder: OutlineInputBorder(
+                      vertical: 18,
+                      horizontal: 20,
+                    ),
+                    border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.transparent),
+                      borderSide: BorderSide.none,
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          const BorderSide(color: primaryColor, width: 2.0),
+                      borderSide: const BorderSide(
+                        color: primaryColor,
+                        width: 2.0,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
                 TextField(
                   controller: _passwordController,
-                  obscureText: true,
+                  obscureText: _isPasswordObscured,
                   decoration: InputDecoration(
                     labelText: 'Password',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordObscured
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isPasswordObscured = !_isPasswordObscured;
+                        });
+                      },
+                    ),
                     filled: true,
                     fillColor: textFieldColor,
                     contentPadding: const EdgeInsets.symmetric(
-                        vertical: 18, horizontal: 20),
-                    enabledBorder: OutlineInputBorder(
+                      vertical: 18,
+                      horizontal: 20,
+                    ),
+                    border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.transparent),
+                      borderSide: BorderSide.none,
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          const BorderSide(color: primaryColor, width: 2.0),
+                      borderSide: const BorderSide(
+                        color: primaryColor,
+                        width: 2.0,
+                      ),
                     ),
                   ),
                 ),
@@ -337,28 +411,41 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 25),
-                const Center(
-                  child: Text(
-                    'Or continue with',
-                    style: TextStyle(color: Colors.grey),
-                  ),
+                const Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Text(
+                        'Or continue with',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
                 ),
                 const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildSocialIcon(
-                      FontAwesomeIcons.google,
-                      onPressed: _signInWithGoogle, // This now calls the updated method
+
+                // --- NEW "CONTINUE WITH GOOGLE" BUTTON ---
+                ElevatedButton.icon(
+                  icon: const FaIcon(
+                    FontAwesomeIcons.google,
+                    color: Colors.red,
+                    size: 20,
+                  ),
+                  label: const Text('Continue with Google'),
+                  onPressed: _signInWithGoogle,
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor: Colors.black87,
+                    backgroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.grey.shade300),
                     ),
-                    const SizedBox(width: 20),
-                    _buildSocialIcon(
-                      FontAwesomeIcons.facebookF,
-                      onPressed: () {},
-                    ),
-                    const SizedBox(width: 20),
-                    _buildSocialIcon(FontAwesomeIcons.apple, onPressed: () {}),
-                  ],
+                    elevation: 2,
+                    shadowColor: Colors.grey.withOpacity(0.2),
+                  ),
                 ),
                 const SizedBox(height: 20),
               ],
@@ -368,20 +455,4 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
-  Widget _buildSocialIcon(IconData icon, {required VoidCallback onPressed}) {
-    return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: FaIcon(icon, color: Colors.grey[800], size: 24),
-      ),
-    );
-  }
 }
-
-

@@ -229,9 +229,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-// 🔑 Replace this with your own Gemini API key from Google AI Studio
-const String _apiKey = "AIzaSyAzJvCu4Eij8VhtJypO2HJnpxtO2XsW8mc";
+final String apiKey = dotenv.env['API_KEY'] ?? 'API_KEY_NOT_FOUND';
 
 class AiToolsScreen extends StatefulWidget {
   const AiToolsScreen({super.key});
@@ -270,7 +270,7 @@ class _AiToolsScreenState extends State<AiToolsScreen> {
     });
 
     final url = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=$_apiKey',
+      "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=$apiKey",
     );
 
     final requestBody = jsonEncode({
@@ -335,10 +335,10 @@ class _AiToolsScreenState extends State<AiToolsScreen> {
       backgroundColor: const Color(0xFFF0F4F8),
       appBar: AppBar(
         title: const Text(
-          'Gemini AI Assistant',
+          ' Your AI Assistant',
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
-        backgroundColor: const Color(0xFF4A90E2),
+        backgroundColor: const Color.fromARGB(255, 226, 147, 74),
         elevation: 2,
       ),
       body: Column(
