@@ -5,7 +5,7 @@ workflows:
     environment:
       flutter: stable
       groups:
-        - prepbuddy-env      # 👈 your group name here
+        - prepbuddy-env
       vars:
         PROJECT_DIR: "frontend"
     scripts:
@@ -14,13 +14,17 @@ workflows:
           cd $PROJECT_DIR
       - name: Decode google-services.json
         script: |
+          cd $PROJECT_DIR
           echo "Recreating google-services.json..."
+          mkdir -p android/app
           echo $GOOGLE_SERVICES_JSON | base64 --decode > android/app/google-services.json
       - name: Get Flutter dependencies
         script: |
+          cd $PROJECT_DIR
           flutter pub get
       - name: Build release APK
         script: |
+          cd $PROJECT_DIR
           flutter build apk --release
     artifacts:
       - frontend/build/app/outputs/flutter-apk/app-release.apk
